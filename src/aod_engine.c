@@ -182,6 +182,96 @@ void aod_render_clock(
     }
 }
 
+static const uint8_t icon_msg_8x8[8]   = {0x3C, 0x42, 0x99, 0x81, 0xBD, 0xA5, 0x42, 0x3C};
+static const uint8_t icon_mail_8x8[8]  = {0x7E, 0x81, 0xBD, 0xA5, 0x99, 0x81, 0x7E, 0x00};
+static const uint8_t icon_call_8x8[8]  = {0x18, 0x3C, 0x7E, 0x18, 0x18, 0x7E, 0x3C, 0x18};
+static const uint8_t icon_alert_8x8[8] = {0x18, 0x24, 0x42, 0x42, 0x7E, 0x18, 0x00, 0x18};
+
+void aod_render_extended_clock(
+    aod_framebuffer *fb,
+    const aod_clock_config *cfg,
+    aod_rect *dirty_rect
+) {
+    if (!fb || !fb->buffer || !cfg) return;
+
+    char txt[48];
+    if (cfg->show_seconds) {
+        snprintf(txt, sizeof(txt), "%02u:%02u:%02u  %u%%",
+                 cfg->hour, cfg->minute, cfg->second, cfg->battery_pct);
+    } else {
+        snprintf(txt, sizeof(txt), "%02u:%02u  %u%%",
+                 cfg->hour, cfg->minute, cfg->battery_pct);
+    }
+
+    size_t len = strlen(txt);
+    uint32_t txt_w = (uint32_t)(len * 8);
+    uint32_t total_w = txt_w;
+    uint32_t notif_w = 0;
+
+    if (cfg->show_notifications) {
+        /* 4 icons spaced by 12px */
+        notif_w = 4 * 12;
+        if (notif_w > total_w) total_w = notif_w;
+    }
+
+    int32_t base_x = (fb->width > total_w) ? (int32_t)((fb->width - total_w) / 2) : 0;
+    int32_t base_y = (fb->height > 40) ? (int32_t)((fb->height - 40) / 2) : 0;
+
+    /* Apply burn-in mitigation shift */
+    base_x += cfg->shift_x;
+    base_y += cfg->shift_y;
+    if (base_x < 0) base_x = 0;
+    if (base_y < 0) base_y = 0;
+
+    uint32_t total_h = cfg->show_notifications ? 32 : 16;
+    if (dirty_rect) {
+        dirty_rect->x = (uint32_t)base_x;
+        dirty_rect->y = (uint32_t)base_y;
+        dirty_rect->w = total_w;
+        dirty_rect->h = total_h;
+    }
+
+    /* Render clock string */
+    uint32_t clk_x = (uint32_t)base_x;
+    if (total_w > txt_w) {
+        clk_x += (total_w - txt_w) / 2;
+    }
+    for (size_t i = 0; i < len; ++i) {
+        const uint8_t *glyph = aod_get_font_glyph_8x16(txt[i]);
+        uint32_t gx = clk_x + (uint32_t)(i * 8);
+        if (gx + 8 <= fb->width && (uint32_t)base_y + 16 <= fb->height) {
+            uint8_t *dst_pixel = fb->buffer + ((uint32_t)base_y * fb->stride) + (gx * 4);
+            aod_neon_blit_glyph_1bpp(dst_pixel, fb->stride, glyph, 8, 16, 0xFFE0E0E0);
+        }
+    }
+
+    /* Render optional notification icons */
+    if (cfg->show_notifications) {
+        uint32_t notif_y = (uint32_t)base_y + 20;
+        uint32_t icon_start_x = (uint32_t)base_x;
+        if (total_w > notif_w) {
+            icon_start_x += (total_w - notif_w) / 2;
+        }
+
+        const uint8_t *icon_ptrs[4] = {
+            icon_msg_8x8, icon_mail_8x8, icon_call_8x8, icon_alert_8x8
+        };
+        uint32_t flags[4] = {
+            AOD_NOTIF_MSG, AOD_NOTIF_MAIL, AOD_NOTIF_CALL, AOD_NOTIF_ALERT
+        };
+
+        for (int i = 0; i < 4; ++i) {
+            uint32_t ix = icon_start_x + (uint32_t)(i * 12);
+            if ((cfg->notification_flags & flags[i]) &&
+                ix + 8 <= fb->width && notif_y + 8 <= fb->height) {
+                uint8_t *dst_pixel = fb->buffer + (notif_y * fb->stride) + (ix * 4);
+                /* Blit 8x8 notification icon */
+                aod_neon_blit_glyph_1bpp(dst_pixel, fb->stride, icon_ptrs[i], 8, 8, 0xFF00E5FF);
+            }
+        }
+    }
+}
+
 /*
  * OLED power model (empirically grounded):
  *   P_total = P_quiescent + P_panel

@@ -78,11 +78,34 @@ void aod_commit_drm_kms(
     uint32_t connector_id
 );
 
+#define AOD_NOTIF_MSG   (1u << 0)
+#define AOD_NOTIF_MAIL  (1u << 1)
+#define AOD_NOTIF_CALL  (1u << 2)
+#define AOD_NOTIF_ALERT (1u << 3)
+
+typedef struct {
+    uint32_t hour;
+    uint32_t minute;
+    uint32_t second;
+    uint32_t show_seconds;
+    uint32_t battery_pct;
+    uint32_t show_notifications;
+    uint32_t notification_flags;
+    int32_t shift_x;
+    int32_t shift_y;
+} aod_clock_config;
+
 void aod_render_clock(
     aod_framebuffer *fb,
     uint32_t hour,
     uint32_t minute,
     uint32_t battery_pct,
+    aod_rect *dirty_rect
+);
+
+void aod_render_extended_clock(
+    aod_framebuffer *fb,
+    const aod_clock_config *cfg,
     aod_rect *dirty_rect
 );
 
