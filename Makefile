@@ -15,9 +15,13 @@ BENCH_SRCS := $(BENCH_DIR)/bench_aod_micro.c
 OBJS := $(SRCS:.c=.o)
 BENCH_OBJS := $(BENCH_SRCS:.c=.o)
 
-.PHONY: all clean bench run lib
+DEVICE_RUNNER := aod_device_runner
+DEVICE_RUNNER_SRC := $(BENCH_DIR)/aod_device_runner.c
+DEVICE_RUNNER_OBJ := $(DEVICE_RUNNER_SRC:.c=.o)
 
-all: lib bench
+.PHONY: all clean bench run lib runner
+
+all: lib bench runner
 
 lib: $(TARGET).a
 
@@ -25,6 +29,11 @@ $(TARGET).a: $(OBJS)
 	ar rcs $@ $^
 
 bench: $(BENCHMARK)
+
+runner: $(DEVICE_RUNNER)
+
+$(DEVICE_RUNNER): $(DEVICE_RUNNER_OBJ) $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(BENCHMARK): $(BENCH_OBJS) $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -39,7 +48,7 @@ run: bench
 	@./$(BENCHMARK)
 
 clean:
-	@rm -f $(OBJS) $(BENCH_OBJS) $(TARGET).a $(BENCHMARK)
+	@rm -f $(OBJS) $(BENCH_OBJS) $(DEVICE_RUNNER_OBJ) $(TARGET).a $(BENCHMARK) $(DEVICE_RUNNER)
 
 # Cross-compilation note for Android:
 # To cross-compile for Android with NDK clang:

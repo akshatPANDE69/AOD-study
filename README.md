@@ -83,6 +83,51 @@ sudo ./bench_aod_micro
 
 Output includes real-time benchmark counters and power estimates.
 
+## Mobile Testing & Real Device Benchmarking
+
+### Option 1: Native Android Termux (Recommended for Hardware-Level NEON Profiling)
+
+1. **Install Termux** from F-Droid or GitHub.
+2. **Install build tools:**
+   ```bash
+   pkg update && pkg install -y git clang make
+   ```
+3. **Clone and navigate:**
+   ```bash
+   git clone https://github.com/akshatPANDE69/AOD-study.git
+   cd AOD-study
+   ```
+4. **Run the automated runner:**
+   ```bash
+   chmod +x termux_runner.sh
+   ./termux_runner.sh
+   ```
+5. **Enter test duration** (e.g. `30` seconds). The runner will:
+   - Compile and execute the native ARM64 NEON pipeline directly on your phone's CPU cores.
+   - Read real-time Linux `sysfs` PMIC / battery drain data (`/sys/class/power_supply/battery/current_now`).
+   - Print a clean, **copy-pasteable Markdown table** with real measured telemetry.
+
+---
+
+### Option 2: Android App / APK (.apk)
+
+- **Automatic APK builds** are compiled by GitHub Actions via [`.github/workflows/build_apk.yml`](.github/workflows/build_apk.yml).
+- **Download the APK** from the **GitHub Actions artifacts** or the **Releases** page.
+- **Features:**
+  - Fullscreen immersive pure OLED black background (`#000000`).
+  - Customizable test timer (e.g., 10s, 30s, 60s, 300s).
+  - Real-time nano-second render latency measurement.
+  - **Copy Results** button that copies the measured report directly to your clipboard.
+
+---
+
+### Option 3: Instant Mobile Web OLED Runner (Zero-Install)
+
+1. Open [`web/index.html`](web/index.html) in **mobile Chrome** or **Firefox**.
+2. The page launches a fullscreen pure OLED black canvas benchmark.
+3. Tracks live microsecond-precision frame timings.
+4. Click **Copy Markdown Report** to export real device results to your clipboard.
+
 ## Repository Structure
 ```
 AOD-study/

@@ -1,6 +1,7 @@
 *.o
 *.a
 bench_aod_micro
+aod_device_runner
 graphify-out/
 .DS_Store
 build/

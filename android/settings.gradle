@@ -1,0 +1,2 @@
+rootProject.name = "AODStudy"
+include ':app'
