@@ -1,0 +1,6 @@
+*.o
+*.a
+bench_aod_micro
+graphify-out/
+.DS_Store
+build/
