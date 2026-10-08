@@ -40,15 +40,26 @@ Bypassing compositor stack with:
 - V-sync synchronized presentation timing
 - Zero-copy GPU->display pipeline
 
-## Benchmark Results Table (measured natively on ARM64)
+## Benchmark Results Table
 
-| Metric | Value | Details |
-|--------|-------|---------|
-| Glyph Blitting | 23.30 ns / glyph | 5,494.74 MPix/s throughput |
-| APL Calculation @ 1080x2400 | 415.56 µs | 23.24 GB/s memory bandwidth |
-| APL Calculation @ 1440x3120 | 719.26 µs | 23.27 GB/s memory bandwidth |
-| Selective Refresh Savings | 99.23% | 80 KB dirty rect vs 10.37 MB full frame |
-| CPU Active Duty Cycle | 0.000833% per 60s | >99.999% WFI sleep residency |
+### Host Microbenchmarks (Apple Silicon M1 ARM64, clang -O3)
+
+| Metric | Measured Value | Architecture / Details |
+|--------|----------------|------------------------|
+| **Glyph Blitting** | 55.00 ns / glyph | 2,327 MPix/s throughput via NEON bit-unpacking |
+| **APL Calculation @ 1080x2400** | 440.25 µs | 21.93 GB/s memory bandwidth |
+| **APL Calculation @ 1440x3120** | 687.88 µs | 24.33 GB/s memory bandwidth |
+| **Dirty-Rect Bandwidth Reduction** | 99.23% | 80 KB dirty rect vs 10.37 MB full frame |
+
+### Analytic Simulation Models (Theoretical OLED Panels)
+
+- **PenTile Diamond Subpixel Power Model:** Evaluated with Samsung AMOLED RGBG emission curves, 1.5 mW quiescent driver baseline → 23.3% subpixel dynamic emission savings.
+- **Projected CPU Duty Cycle:** 0.000833% per 60s clock update (assuming 500 µs active time per 1 Hz/minute refresh).
+
+### Physical Hardware Telemetry Roadmap (Next Phase)
+
+- **Snapdragon 8 Gen 2 / Dimensity 9300 PMIC rail measurement** via Monsoon Power Monitor.
+- **Android SurfaceFlinger IPC vs Direct DRM/KMS dumb-buffer page flip** on Linux `/dev/dri/card0`.
 
 ## Building & Running
 
