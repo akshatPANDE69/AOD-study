@@ -29,6 +29,7 @@ class MainActivity : Activity() {
     private lateinit var modeSwitcher: RadioGroup
     private lateinit var modeContainer: FrameLayout
     private var refreshStudyStatusOnResume: (() -> Unit)? = null
+    private var studyStatusTicker: Runnable? = null
 
     // -------------------------------------------------------------------------
     // Shared services
@@ -105,6 +106,7 @@ class MainActivity : Activity() {
 
         // Switch listener
         modeSwitcher.setOnCheckedChangeListener { _, checkedId ->
+            stopStudyStatusTicker()
             refreshStudyStatusOnResume = null
             val selectedMode = findViewById<RadioButton>(checkedId).text.toString()
             if (selectedMode != "Display Modes") resetPreferredDisplayMode()
@@ -123,6 +125,44 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshStudyStatusOnResume?.invoke()
+        startStudyStatusTicker()
+    }
+
+    override fun onPause() {
+        stopStudyStatusTicker()
+        super.onPause()
+    }
+
+    private fun startStudyStatusTicker() {
+        stopStudyStatusTicker()
+        val refresh = refreshStudyStatusOnResume ?: return
+        val prefs = getSharedPreferences(StudyTrialStore.PREFS, MODE_PRIVATE)
+        if (!prefs.getBoolean(StudyTrialStore.ACTIVE, false)) return
+        val ticker = object : Runnable {
+            override fun run() {
+                refresh()
+                if (prefs.getBoolean(StudyTrialStore.ACTIVE, false)) {
+                    mainHandler.postDelayed(this, 1_000L)
+                } else {
+                    studyStatusTicker = null
+                }
+            }
+        }
+        studyStatusTicker = ticker
+        mainHandler.post(ticker)
+    }
+
+    private fun stopStudyStatusTicker() {
+        studyStatusTicker?.let { mainHandler.removeCallbacks(it) }
+        studyStatusTicker = null
+    }
+
+    private fun formatTimer(milliseconds: Long): String {
+        val totalSeconds = milliseconds.coerceAtLeast(0L) / 1_000L
+        val hours = totalSeconds / 3_600L
+        val minutes = (totalSeconds % 3_600L) / 60L
+        val seconds = totalSeconds % 60L
+        return String.format(java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
     }
 
     // -------------------------------------------------------------------------
@@ -325,11 +365,25 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(4))
         })
         container.addView(TextView(this).apply {
-            text = "Timed screen-off readings. After starting, lock the phone; the app works in the background and does not show a countdown."
+            text = "Run Test starts the session timer immediately. Lock the phone; the first reading begins after a 30-second settling period. The timer uses Android’s monotonic clock and resumes when you return."
             setTextColor(Color.LTGRAY)
             textSize = 14f
             setPadding(0, 0, 0, dp(10))
         })
+
+        val timerView = TextView(this).apply {
+            text = "00:00:00"
+            setTextColor(Color.WHITE)
+            textSize = 32f
+            typeface = Typeface.MONOSPACE
+            setPadding(0, 0, 0, dp(4))
+        }
+        container.addView(TextView(this).apply {
+            text = "Elapsed since Run Test · HH:MM:SS"
+            setTextColor(Color.LTGRAY)
+            textSize = 13f
+        })
+        container.addView(timerView)
 
         val statusView = TextView(this).apply {
             setTextColor(Color.WHITE)
@@ -424,15 +478,35 @@ class MainActivity : Activity() {
                 prefs.getLong(StudyTrialStore.PENDING_START_TARGET_MS, Long.MAX_VALUE)
             }
             statusView.text = when {
-                !active ->
+                !active -> {
+                    val savedDuration = prefs.getLong(StudyTrialStore.LAST_SESSION_DURATION_MS, 0L)
+                    timerView.text = if (savedDuration > 0L) formatTimer(savedDuration) else "00:00:00"
                     prefs.getString(StudyTrialStore.LAST_RESULT, "No study trials saved yet.")
+                }
                 expectedElapsed != Long.MAX_VALUE && SystemClock.elapsedRealtime() > expectedElapsed + 120_000L ->
-                    "A required alarm snapshot was not saved. The run may have been interrupted; cancel it and do not use it."
-                !hasStart ->
-                    "Trial scheduled. Lock the phone within 30 seconds. The first reading starts after that; leave it locked through the full trial."
+                    run {
+                        val sessionStart = prefs.getLong(StudyTrialStore.SESSION_START_ELAPSED_MS, expectedElapsed)
+                        timerView.text = formatTimer(SystemClock.elapsedRealtime() - sessionStart)
+                        "A required alarm snapshot was not saved. The run may have been interrupted; cancel it and do not use it."
+                    }
+                !hasStart -> {
+                    val now = SystemClock.elapsedRealtime()
+                    val sessionStart = prefs.getLong(StudyTrialStore.SESSION_START_ELAPSED_MS, now)
+                    timerView.text = formatTimer(now - sessionStart)
+                    val untilStart = (expectedElapsed - now).coerceAtLeast(0L)
+                    "SETTLING · First reading in ${formatTimer(untilStart)}. Lock the phone now; measurement starts after the 30-second settling period."
+                }
                 else -> {
+                    val now = SystemClock.elapsedRealtime()
+                    val sessionStart = prefs.getLong(StudyTrialStore.SESSION_START_ELAPSED_MS, now)
+                    timerView.text = formatTimer(now - sessionStart)
                     val metadata = org.json.JSONObject(prefs.getString("metadata", "") ?: "")
-                    "Trial ${metadata.optString("trialId")} is running. Leave the phone locked until its timer ends; there is no on-screen countdown."
+                    val remaining = (expectedElapsed - now).coerceAtLeast(0L)
+                    if (remaining > 0L) {
+                        "MEASURING · ${formatTimer(remaining)} remaining for trial ${metadata.optString("trialId")}. Keep the phone locked."
+                    } else {
+                        "MEASUREMENT TIME REACHED · Waiting for Android to deliver the endpoint alarm. Keep the phone locked; actual delay is recorded."
+                    }
                 }
             }
         }
@@ -460,7 +534,7 @@ class MainActivity : Activity() {
         }
 
         val startButton = Button(this).apply {
-            text = "Start timed trial"
+            text = "Run Test"
             setOnClickListener {
                 if (prefs.getBoolean(StudyTrialStore.ACTIVE, false)) {
                     Toast.makeText(this@MainActivity, "A trial is already scheduled or running.", Toast.LENGTH_LONG).show()
@@ -478,7 +552,7 @@ class MainActivity : Activity() {
                 }
                 val alarmManager = getSystemService(AlarmManager::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                    statusView.text = "Timed alarms are not enabled. Tap ‘Enable exact trial timer’, allow Alarms & reminders, return here, then tap Start again."
+                    statusView.text = "Timed alarms are not enabled. Tap ‘Enable exact trial timer’, allow Alarms & reminders, return here, then tap Start Test again."
                     scroll.post { scroll.smoothScrollTo(0, 0) }
                     Toast.makeText(this@MainActivity, "Enable Alarms & reminders, then tap Start again.", Toast.LENGTH_LONG).show()
                     return@setOnClickListener
@@ -514,6 +588,8 @@ class MainActivity : Activity() {
                     .putBoolean(StudyTrialStore.ACTIVE, true)
                     .putString("metadata", metadata.toString())
                     .putString(StudyTrialStore.LAST_RESULT, "")
+                    .putLong(StudyTrialStore.SESSION_START_ELAPSED_MS, SystemClock.elapsedRealtime())
+                    .putLong(StudyTrialStore.LAST_SESSION_DURATION_MS, 0L)
                     .putLong(StudyTrialStore.PENDING_START_TARGET_MS, beginAtElapsed)
                     .remove(StudyTrialStore.START_SNAPSHOT)
                     .remove(StudyTrialStore.TARGET_ELAPSED_MS)
@@ -525,10 +601,12 @@ class MainActivity : Activity() {
                         beginPendingIntent
                     )
                     refreshStatus()
+                    startStudyStatusTicker()
                     scroll.post { scroll.smoothScrollTo(0, 0) }
                 } catch (_: SecurityException) {
                     prefs.edit().putBoolean(StudyTrialStore.ACTIVE, false)
                         .remove(StudyTrialStore.PENDING_START_TARGET_MS)
+                        .remove(StudyTrialStore.SESSION_START_ELAPSED_MS)
                         .remove("metadata")
                         .putString(StudyTrialStore.LAST_RESULT, "Exact alarm access was unavailable. Trial was not started.")
                         .apply()
@@ -560,6 +638,8 @@ class MainActivity : Activity() {
                     .remove(StudyTrialStore.START_SNAPSHOT)
                     .remove(StudyTrialStore.TARGET_ELAPSED_MS)
                     .remove(StudyTrialStore.PENDING_START_TARGET_MS)
+                    .remove(StudyTrialStore.SESSION_START_ELAPSED_MS)
+                    .putLong(StudyTrialStore.LAST_SESSION_DURATION_MS, 0L)
                     .remove("metadata")
                     .putString(StudyTrialStore.LAST_RESULT, "Trial cancelled and not saved.")
                     .apply()

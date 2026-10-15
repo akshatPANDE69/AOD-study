@@ -181,6 +181,8 @@ object StudyTrialStore {
     const val START_SNAPSHOT = "start_snapshot"
     const val TARGET_ELAPSED_MS = "target_elapsed_ms"
     const val PENDING_START_TARGET_MS = "pending_start_target_ms"
+    const val SESSION_START_ELAPSED_MS = "session_start_elapsed_ms"
+    const val LAST_SESSION_DURATION_MS = "last_session_duration_ms"
     const val LAST_RESULT = "last_result"
     const val REQUEST_CODE = 7319
 
@@ -196,6 +198,8 @@ object StudyTrialStore {
         val start = SystemSnapshot.fromJson(JSONObject(rawStart))
         val targetElapsed = prefs.getLong(TARGET_ELAPSED_MS, end.elapsedRealtimeMs)
         val elapsedMs = end.elapsedRealtimeMs - start.elapsedRealtimeMs
+        val sessionStartElapsedMs = prefs.getLong(SESSION_START_ELAPSED_MS, start.elapsedRealtimeMs)
+        val sessionDurationMs = (end.elapsedRealtimeMs - sessionStartElapsedMs).coerceAtLeast(0L)
         val elapsedHours = elapsedMs / 3_600_000.0
         val deltaEnergyNwh = if (
             start.energyCounterNwh != Long.MIN_VALUE && end.energyCounterNwh != Long.MIN_VALUE
@@ -326,6 +330,8 @@ object StudyTrialStore {
         prefs.edit()
             .putBoolean(ACTIVE, false)
             .putString(LAST_RESULT, result)
+            .putLong(LAST_SESSION_DURATION_MS, sessionDurationMs)
+            .remove(SESSION_START_ELAPSED_MS)
             .remove(START_SNAPSHOT)
             .remove(TARGET_ELAPSED_MS)
             .remove(PENDING_START_TARGET_MS)
@@ -438,6 +444,7 @@ class StudyTrialReceiver : BroadcastReceiver() {
                 prefs.edit()
                     .putBoolean(StudyTrialStore.ACTIVE, false)
                     .putString(StudyTrialStore.LAST_RESULT, "Trial could not be scheduled or system telemetry could not be read. Do not use the run.")
+                    .remove(StudyTrialStore.SESSION_START_ELAPSED_MS)
                     .remove(StudyTrialStore.START_SNAPSHOT)
                     .remove(StudyTrialStore.TARGET_ELAPSED_MS)
                     .remove("metadata")

@@ -20,6 +20,8 @@ class TrialBootReceiver : BroadcastReceiver() {
             .remove(StudyTrialStore.START_SNAPSHOT)
             .remove(StudyTrialStore.TARGET_ELAPSED_MS)
             .remove(StudyTrialStore.PENDING_START_TARGET_MS)
+            .remove(StudyTrialStore.SESSION_START_ELAPSED_MS)
+            .putLong(StudyTrialStore.LAST_SESSION_DURATION_MS, 0L)
             .remove("metadata")
             .apply()
     }
