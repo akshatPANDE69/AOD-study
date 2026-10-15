@@ -9,6 +9,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.*
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.StateListDrawable
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.*
 import android.provider.Settings
@@ -21,6 +26,14 @@ import kotlin.math.min
 import kotlin.random.Random
 
 class MainActivity : Activity() {
+
+    private val colorBackground = Color.rgb(14, 16, 18)
+    private val colorSurface = Color.rgb(24, 27, 30)
+    private val colorField = Color.rgb(30, 34, 37)
+    private val colorBorder = Color.rgb(57, 63, 68)
+    private val colorText = Color.rgb(242, 244, 246)
+    private val colorMuted = Color.rgb(166, 174, 181)
+    private val colorAccent = Color.rgb(91, 190, 139)
 
     // -------------------------------------------------------------------------
     // UI containers
@@ -48,7 +61,7 @@ class MainActivity : Activity() {
         // Root layout
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(colorBackground)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.MATCH_PARENT
@@ -59,7 +72,7 @@ class MainActivity : Activity() {
         // show the complete row without clipping.
         modeSwitcher = RadioGroup(this).apply {
             orientation = RadioGroup.HORIZONTAL
-            setBackgroundColor(Color.DKGRAY)
+            setBackgroundColor(colorSurface)
             layoutParams = android.view.ViewGroup.LayoutParams(
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -71,9 +84,16 @@ class MainActivity : Activity() {
             val rb = RadioButton(this).apply {
                 text = title
                 id = View.generateViewId()
-                setTextColor(Color.WHITE)
-                setPadding(dp(12), dp(8), dp(12), dp(8))
+                setTextColor(ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                    intArrayOf(colorText, colorMuted)
+                ))
+                buttonDrawable = ColorDrawable(Color.TRANSPARENT)
+                background = tabBackground()
+                setPadding(dp(16), dp(10), dp(16), dp(10))
                 minHeight = dp(48)
+                gravity = Gravity.CENTER
+                textSize = 14f
             }
             modeSwitcher.addView(rb)
             if (index == 0) rb.isChecked = true
@@ -90,7 +110,8 @@ class MainActivity : Activity() {
         val modeScroller = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             setFillViewport(true)
-            setBackgroundColor(Color.DKGRAY)
+            setBackgroundColor(colorSurface)
+            setPadding(dp(6), dp(5), dp(6), dp(5))
             addView(modeSwitcher)
         }
         root.addView(modeScroller, LinearLayout.LayoutParams(
@@ -103,6 +124,8 @@ class MainActivity : Activity() {
         ))
 
         setContentView(root)
+        window.statusBarColor = colorBackground
+        window.navigationBarColor = colorBackground
 
         // Switch listener
         modeSwitcher.setOnCheckedChangeListener { _, checkedId ->
@@ -172,6 +195,82 @@ class MainActivity : Activity() {
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics
     ).toInt()
 
+    private fun roundedBackground(fill: Int, stroke: Int = fill, radiusDp: Int = 14): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = dp(radiusDp).toFloat()
+            if (stroke != fill) setStroke(dp(1), stroke)
+        }
+
+    private fun tabBackground(): StateListDrawable = StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_checked), roundedBackground(Color.rgb(38, 53, 46), Color.rgb(66, 111, 87), 12))
+        addState(intArrayOf(), roundedBackground(Color.TRANSPARENT, Color.TRANSPARENT, 12))
+    }
+
+    private fun styleButton(button: Button, primary: Boolean = false) {
+        button.isAllCaps = false
+        button.textSize = 15f
+        button.setTextColor(if (primary) Color.rgb(10, 24, 17) else colorText)
+        button.minHeight = dp(50)
+        val buttonSurface = roundedBackground(
+            if (primary) colorAccent else colorSurface,
+            if (primary) colorAccent else colorBorder,
+            14
+        )
+        button.background = RippleDrawable(
+            ColorStateList.valueOf(if (primary) Color.rgb(41, 127, 88) else Color.rgb(65, 72, 78)),
+            buttonSurface,
+            null
+        )
+        button.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(6); bottomMargin = dp(6) }
+    }
+
+    private fun styleEditText(editText: EditText, hint: String = "Optional") {
+        editText.setTextColor(colorText)
+        editText.setHintTextColor(Color.rgb(143, 151, 159))
+        editText.hint = hint
+        editText.textSize = 16f
+        editText.setPadding(dp(14), dp(12), dp(14), dp(12))
+        editText.minHeight = dp(52)
+        editText.background = roundedBackground(colorField, colorBorder, 12)
+        editText.backgroundTintList = null
+        editText.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(7) }
+    }
+
+    private fun styleSpinner(spinner: Spinner) {
+        spinner.background = roundedBackground(colorField, colorBorder, 12)
+        spinner.setPadding(dp(10), dp(4), dp(10), dp(4))
+        spinner.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(52)
+        ).apply { bottomMargin = dp(7) }
+    }
+
+    private fun darkSpinnerAdapter(items: List<String>): ArrayAdapter<String> =
+        object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
+            override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+                (super.getView(position, convertView, parent) as TextView).apply {
+                    setTextColor(colorText)
+                    textSize = 15f
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(8), 0)
+                }
+
+            override fun getDropDownView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+                (super.getDropDownView(position, convertView, parent) as TextView).apply {
+                    setTextColor(colorText)
+                    setBackgroundColor(colorSurface)
+                    textSize = 15f
+                    setPadding(dp(14), dp(12), dp(14), dp(12))
+                }
+        }.apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+
     private fun sp(v: Int): Float = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_SP, v.toFloat(), resources.displayMetrics
     )
@@ -202,6 +301,7 @@ class MainActivity : Activity() {
 
         val startBtn = Button(this).apply {
             text = "Read battery current during black overlay (8 s)"
+            styleButton(this, primary = true)
         }
 
         val resultView = TextView(this).apply {
@@ -212,6 +312,7 @@ class MainActivity : Activity() {
         val copyBtn = Button(this).apply {
             text = "Copy Markdown Report"
             isEnabled = false
+            styleButton(this)
         }
 
         val measurementNote = TextView(this).apply {
@@ -302,7 +403,8 @@ class MainActivity : Activity() {
             "${it.refreshRate} Hz • ${it.physicalWidth}×${it.physicalHeight} • mode ${it.modeId}"
         }.ifEmpty { listOf("No display modes reported") }
         val modeSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, modeLabels)
+            adapter = darkSpinnerAdapter(modeLabels)
+            styleSpinner(this)
         }
         val activeMode = TextView(this).apply { setTextColor(Color.WHITE); setPadding(0, dp(8), 0, dp(8)) }
         fun refreshActiveMode() {
@@ -313,6 +415,7 @@ class MainActivity : Activity() {
         refreshActiveMode()
         val applyButton = Button(this).apply {
             text = "Request selected display mode"
+            styleButton(this, primary = true)
             setOnClickListener {
                 val selected = supportedModes.getOrNull(modeSpinner.selectedItemPosition)
                 if (selected == null) {
@@ -328,6 +431,7 @@ class MainActivity : Activity() {
         }
         val autoButton = Button(this).apply {
             text = "Return to system-selected mode"
+            styleButton(this)
             setOnClickListener {
                 val params = window.attributes
                 params.preferredDisplayModeId = 0
@@ -373,51 +477,53 @@ class MainActivity : Activity() {
 
         val timerView = TextView(this).apply {
             text = "00:00:00"
-            setTextColor(Color.WHITE)
+            setTextColor(colorText)
             textSize = 32f
             typeface = Typeface.MONOSPACE
-            setPadding(0, 0, 0, dp(4))
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = roundedBackground(colorSurface, colorBorder, 14)
         }
         container.addView(TextView(this).apply {
             text = "Elapsed since Run Test · HH:MM:SS"
-            setTextColor(Color.LTGRAY)
+            setTextColor(colorMuted)
             textSize = 13f
+            setPadding(0, 0, 0, dp(5))
         })
         container.addView(timerView)
 
         val statusView = TextView(this).apply {
-            setTextColor(Color.WHITE)
+            setTextColor(colorText)
             textSize = 14f
-            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
             minHeight = dp(56)
-            setBackgroundColor(Color.rgb(32, 48, 56))
+            background = roundedBackground(Color.rgb(25, 39, 32), Color.rgb(54, 84, 67), 14)
         }
         container.addView(statusView)
 
-        fun field(label: String, initial: String = ""): EditText {
+        fun field(label: String, initial: String = "", hint: String = if (initial.isBlank()) "Optional" else ""): EditText {
             container.addView(TextView(this).apply {
                 text = label
-                setTextColor(Color.LTGRAY)
-                textSize = 14f
-                setPadding(0, dp(6), 0, dp(2))
-            })
+                setTextColor(colorMuted)
+                textSize = 13f
+                setTypeface(typeface, Typeface.BOLD)
+                setPadding(dp(2), dp(10), 0, dp(5))
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             return EditText(this).apply {
                 setText(initial)
-                setTextColor(Color.WHITE)
-                setHintTextColor(Color.GRAY)
-                setPadding(dp(12), dp(8), dp(12), dp(8))
-                minHeight = dp(48)
+                styleEditText(this, hint)
                 container.addView(this)
             }
         }
 
-        val deviceField = field("Device label", Build.MODEL)
-        val pairField = field("Matched pair/block ID (same for AOD-off and AOD-on runs)")
+        val deviceField = field("Device label", Build.MODEL, "Detected from this phone")
+        val pairField = field("Matched pair/block ID (same for AOD-off and AOD-on runs)", hint = "Required · e.g. N4A-01")
         container.addView(TextView(this).apply {
             text = "Trial condition"
-            setTextColor(Color.LTGRAY)
-            textSize = 14f
-            setPadding(0, dp(6), 0, dp(2))
+            setTextColor(colorMuted)
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(2), dp(10), 0, dp(5))
         })
         val conditionValues = listOf(
             "Screen off, native AOD off",
@@ -425,7 +531,8 @@ class MainActivity : Activity() {
             "LCD persistent-display comparator"
         )
         val conditionSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, conditionValues)
+            adapter = darkSpinnerAdapter(conditionValues)
+            styleSpinner(this)
             container.addView(this)
         }
         val durationField = field("Trial duration in minutes", "60").apply {
@@ -443,22 +550,29 @@ class MainActivity : Activity() {
         coverageField.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         val rgbField = field("Pattern RGB", "")
         val notesField = field("Notes", "")
+        notesField.hint = "Optional · e.g. unplugged, room conditions"
 
         val instructions = TextView(this).apply {
             text = "Pair one screen-off run with native AOD off and one with it on, using the same pair ID. The first reading starts 30 seconds after you tap Start; the endpoint alarm may be delayed by Android. Keep the phone unplugged and untouched. This app cannot change or verify native AOD refresh; physical light frequency needs an external optical sensor."
-            setTextColor(Color.GRAY)
+            setTextColor(colorMuted)
             textSize = 14f
-            setPadding(0, dp(8), 0, dp(8))
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = roundedBackground(colorSurface, colorBorder, 14)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = dp(12); bottomMargin = dp(8) }
         }
         container.addView(instructions)
 
         val inventoryView = TextView(this).apply {
-            setTextColor(Color.LTGRAY)
-            textSize = 11f
-            setPadding(0, dp(4), 0, dp(4))
+            setTextColor(colorMuted)
+            textSize = 12f
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            background = roundedBackground(colorSurface, colorBorder, 12)
         }
         val inventoryButton = Button(this).apply {
             text = "Read device, CPU and GPU inventory"
+            styleButton(this)
             setOnClickListener {
                 val inventory = DeviceTelemetry.inventory(this@MainActivity).toString(2)
                 inventoryView.text = inventory
@@ -515,6 +629,7 @@ class MainActivity : Activity() {
 
         val permissionButton = Button(this).apply {
             text = "Enable exact trial timer"
+            styleButton(this)
             setOnClickListener {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     try {
@@ -535,6 +650,7 @@ class MainActivity : Activity() {
 
         val startButton = Button(this).apply {
             text = "Run Test"
+            styleButton(this, primary = true)
             setOnClickListener {
                 if (prefs.getBoolean(StudyTrialStore.ACTIVE, false)) {
                     Toast.makeText(this@MainActivity, "A trial is already scheduled or running.", Toast.LENGTH_LONG).show()
@@ -619,6 +735,7 @@ class MainActivity : Activity() {
 
         val cancelButton = Button(this).apply {
             text = "Cancel / invalidate trial"
+            styleButton(this)
             setOnClickListener {
                 val alarmManager = getSystemService(AlarmManager::class.java)
                 listOf(
@@ -650,6 +767,7 @@ class MainActivity : Activity() {
 
         val exportButton = Button(this).apply {
             text = "Export saved CSV"
+            styleButton(this)
             setOnClickListener {
                 val file = StudyTrialStore.csvFile(this@MainActivity)
                 if (!file.exists()) {
@@ -668,6 +786,7 @@ class MainActivity : Activity() {
 
         val copyAllButton = Button(this).apply {
             text = "Copy all saved trial telemetry"
+            styleButton(this)
             setOnClickListener {
                 val file = StudyTrialStore.csvFile(this@MainActivity)
                 if (!file.exists() || file.length() == 0L) {
@@ -681,9 +800,10 @@ class MainActivity : Activity() {
 
         container.addView(TextView(this).apply {
             text = "Records device/SoC and best-effort CPU/GPU inventory, CPU count/core lists, battery counters, voltage, temperature, thermal status, display metadata, OEM AOD setting notes, and (on supported Android 15+ devices) available subsystem/power-rail energy counters such as CPU/GPU/display. Vendor availability and definitions vary. Battery counters remain whole-device estimates; component counters may be modeled and cannot isolate AOD by themselves."
-            setTextColor(Color.GRAY)
-            textSize = 14f
-            setPadding(0, dp(8), 0, dp(8))
+            setTextColor(colorMuted)
+            textSize = 13f
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setPadding(dp(2), dp(12), dp(2), dp(8))
         })
         modeContainer.addView(scroll)
     }
