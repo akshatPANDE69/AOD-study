@@ -28,6 +28,7 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var modeSwitcher: RadioGroup
     private lateinit var modeContainer: FrameLayout
+    private var refreshStudyStatusOnResume: (() -> Unit)? = null
 
     // -------------------------------------------------------------------------
     // Shared services
@@ -53,15 +54,15 @@ class MainActivity : Activity() {
             )
         }
 
-        // RadioGroup for mode selection
+        // Keep every mode reachable on narrow screens while letting wide screens
+        // show the complete row without clipping.
         modeSwitcher = RadioGroup(this).apply {
             orientation = RadioGroup.HORIZONTAL
             setBackgroundColor(Color.DKGRAY)
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            layoutParams = params
         }
 
         val modes = listOf("Benchmark", "Display Modes", "Live AOD", "Study Log")
@@ -70,7 +71,8 @@ class MainActivity : Activity() {
                 text = title
                 id = View.generateViewId()
                 setTextColor(Color.WHITE)
-                setPadding(dp(8), dp(4), dp(8), dp(4))
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                minHeight = dp(48)
             }
             modeSwitcher.addView(rb)
             if (index == 0) rb.isChecked = true
@@ -84,7 +86,16 @@ class MainActivity : Activity() {
             )
         }
 
-        root.addView(modeSwitcher)
+        val modeScroller = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            setFillViewport(true)
+            setBackgroundColor(Color.DKGRAY)
+            addView(modeSwitcher)
+        }
+        root.addView(modeScroller, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
         root.addView(modeContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             0, 1f
@@ -94,6 +105,7 @@ class MainActivity : Activity() {
 
         // Switch listener
         modeSwitcher.setOnCheckedChangeListener { _, checkedId ->
+            refreshStudyStatusOnResume = null
             val selectedMode = findViewById<RadioButton>(checkedId).text.toString()
             if (selectedMode != "Display Modes") resetPreferredDisplayMode()
             when (selectedMode) {
@@ -106,6 +118,11 @@ class MainActivity : Activity() {
 
         // Show default mode
         showBenchmarkMode()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshStudyStatusOnResume?.invoke()
     }
 
     // -------------------------------------------------------------------------
@@ -293,24 +310,49 @@ class MainActivity : Activity() {
     @SuppressLint("SetTextI18n")
     private fun showStudyLoggerMode() {
         modeContainer.removeAllViews()
+        val wide = resources.configuration.screenWidthDp >= 600
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            val horizontalPadding = if (wide) 24 else 16
+            setPadding(dp(horizontalPadding), dp(12), dp(horizontalPadding), dp(24))
         }
         val scroll = ScrollView(this).apply { addView(container) }
+
+        container.addView(TextView(this).apply {
+            text = "Study Log"
+            setTextColor(Color.WHITE)
+            textSize = 22f
+            setPadding(0, 0, 0, dp(4))
+        })
+        container.addView(TextView(this).apply {
+            text = "Timed screen-off readings. After starting, lock the phone; the app works in the background and does not show a countdown."
+            setTextColor(Color.LTGRAY)
+            textSize = 14f
+            setPadding(0, 0, 0, dp(10))
+        })
+
+        val statusView = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            minHeight = dp(56)
+            setBackgroundColor(Color.rgb(32, 48, 56))
+        }
+        container.addView(statusView)
 
         fun field(label: String, initial: String = ""): EditText {
             container.addView(TextView(this).apply {
                 text = label
                 setTextColor(Color.LTGRAY)
-                textSize = 12f
+                textSize = 14f
                 setPadding(0, dp(6), 0, dp(2))
             })
             return EditText(this).apply {
                 setText(initial)
                 setTextColor(Color.WHITE)
                 setHintTextColor(Color.GRAY)
-                setPadding(dp(8), dp(4), dp(8), dp(4))
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                minHeight = dp(48)
                 container.addView(this)
             }
         }
@@ -320,7 +362,7 @@ class MainActivity : Activity() {
         container.addView(TextView(this).apply {
             text = "Trial condition"
             setTextColor(Color.LTGRAY)
-            textSize = 12f
+            textSize = 14f
             setPadding(0, dp(6), 0, dp(2))
         })
         val conditionValues = listOf(
@@ -349,9 +391,9 @@ class MainActivity : Activity() {
         val notesField = field("Notes", "")
 
         val instructions = TextView(this).apply {
-            text = "Baseline = screen off with native AOD disabled; compare it with native AOD enabled using the same pair ID. The timer waits 30 seconds before the start snapshot, then takes one endpoint snapshot after your chosen duration. It does not poll during the screen-off interval, avoiding repeated wakeups. This app records but cannot change native AOD refresh. Optical light frequency needs an external photodiode or suitable high-speed instrument. Do not treat reported display mode as physical AOD refresh."
+            text = "Pair one screen-off run with native AOD off and one with it on, using the same pair ID. The first reading starts 30 seconds after you tap Start; the endpoint alarm may be delayed by Android. Keep the phone unplugged and untouched. This app cannot change or verify native AOD refresh; physical light frequency needs an external optical sensor."
             setTextColor(Color.GRAY)
-            textSize = 12f
+            textSize = 14f
             setPadding(0, dp(8), 0, dp(8))
         }
         container.addView(instructions)
@@ -372,13 +414,6 @@ class MainActivity : Activity() {
         container.addView(inventoryButton)
         container.addView(inventoryView)
 
-        val statusView = TextView(this).apply {
-            setTextColor(Color.CYAN)
-            textSize = 13f
-            setPadding(0, dp(8), 0, dp(8))
-        }
-        container.addView(statusView)
-
         val prefs = getSharedPreferences(StudyTrialStore.PREFS, MODE_PRIVATE)
         fun refreshStatus() {
             val active = prefs.getBoolean(StudyTrialStore.ACTIVE, false)
@@ -394,13 +429,14 @@ class MainActivity : Activity() {
                 expectedElapsed != Long.MAX_VALUE && SystemClock.elapsedRealtime() > expectedElapsed + 120_000L ->
                     "A required alarm snapshot was not saved. The run may have been interrupted; cancel it and do not use it."
                 !hasStart ->
-                    "Trial scheduled. Lock the phone now. The start snapshot is taken after the 30-second settling period."
+                    "Trial scheduled. Lock the phone within 30 seconds. The first reading starts after that; leave it locked through the full trial."
                 else -> {
                     val metadata = org.json.JSONObject(prefs.getString("metadata", "") ?: "")
-                    "Trial ${metadata.optString("trialId")} is running. Leave the phone locked until its timer ends."
+                    "Trial ${metadata.optString("trialId")} is running. Leave the phone locked until its timer ends; there is no on-screen countdown."
                 }
             }
         }
+        refreshStudyStatusOnResume = ::refreshStatus
         refreshStatus()
 
         val permissionButton = Button(this).apply {
@@ -442,7 +478,9 @@ class MainActivity : Activity() {
                 }
                 val alarmManager = getSystemService(AlarmManager::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                    Toast.makeText(this@MainActivity, "Enable the exact trial timer first.", Toast.LENGTH_LONG).show()
+                    statusView.text = "Timed alarms are not enabled. Tap ‘Enable exact trial timer’, allow Alarms & reminders, return here, then tap Start again."
+                    scroll.post { scroll.smoothScrollTo(0, 0) }
+                    Toast.makeText(this@MainActivity, "Enable Alarms & reminders, then tap Start again.", Toast.LENGTH_LONG).show()
                     return@setOnClickListener
                 }
 
@@ -487,6 +525,7 @@ class MainActivity : Activity() {
                         beginPendingIntent
                     )
                     refreshStatus()
+                    scroll.post { scroll.smoothScrollTo(0, 0) }
                 } catch (_: SecurityException) {
                     prefs.edit().putBoolean(StudyTrialStore.ACTIVE, false)
                         .remove(StudyTrialStore.PENDING_START_TARGET_MS)
@@ -563,7 +602,7 @@ class MainActivity : Activity() {
         container.addView(TextView(this).apply {
             text = "Records device/SoC and best-effort CPU/GPU inventory, CPU count/core lists, battery counters, voltage, temperature, thermal status, display metadata, OEM AOD setting notes, and (on supported Android 15+ devices) available subsystem/power-rail energy counters such as CPU/GPU/display. Vendor availability and definitions vary. Battery counters remain whole-device estimates; component counters may be modeled and cannot isolate AOD by themselves."
             setTextColor(Color.GRAY)
-            textSize = 12f
+            textSize = 14f
             setPadding(0, dp(8), 0, dp(8))
         })
         modeContainer.addView(scroll)

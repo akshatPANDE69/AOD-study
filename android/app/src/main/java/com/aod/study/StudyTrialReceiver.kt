@@ -229,6 +229,13 @@ object StudyTrialStore {
             energyMwh / elapsedHours
         } else Double.NaN
         val alarmLatenessMs = end.elapsedRealtimeMs - targetElapsed
+        val invalidReasons = mutableListOf<String>()
+        if (start.batteryPlugType != 0 || end.batteryPlugType != 0) {
+            invalidReasons += "the phone was plugged in or plug state was unavailable"
+        }
+        if (alarmLatenessMs > 120_000L) {
+            invalidReasons += "the endpoint alarm was more than 2 minutes late"
+        }
 
         val metadata = prefs.getString("metadata", "") ?: ""
         val data = JSONObject(metadata)
@@ -305,6 +312,9 @@ object StudyTrialStore {
 
         val result = buildString {
             append("Trial $trialId saved. ")
+            if (invalidReasons.isNotEmpty()) {
+                append("INVALID for study analysis: ${invalidReasons.joinToString("; ")}. ")
+            }
             append("Whole-device battery energy source: $energySource. ")
             append("Energy change: ${energyMwh.csvNumber()} mWh; ")
             append("average battery power: ${averagePowerMw.csvNumber()} mW. ")
