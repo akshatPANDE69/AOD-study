@@ -111,13 +111,13 @@ Output includes real-time benchmark counters and power estimates.
 
 ### Option 2: Android App / APK (.apk)
 
-- **Automatic APK builds** are compiled by GitHub Actions via [`.github/workflows/build_apk.yml`](.github/workflows/build_apk.yml).
-- **Download the APK** from the **GitHub Actions artifacts** or the **Releases** page.
-- **Features:**
-  - Fullscreen immersive pure OLED black background (`#000000`).
-  - Customizable test timer (e.g., 10s, 30s, 60s, 300s).
-  - Real-time nano-second render latency measurement.
-  - **Copy Results** button that copies the measured report directly to your clipboard.
+- The Android project contains exploratory benchmark/demo modes and a **Study Log** for timed, screen-off paired trials. It records device/SoC and best-effort CPU/GPU inventory, processor lists, battery properties, thermal status, and OS display metadata. On Android 15+ devices that expose them, it also reads subsystem/power-rail energy counters (for example CPU/GPU/display); availability and meaning vary by OEM. Set duration in minutes, enter OEM AOD settings and optional external optical measurements, and copy or export all saved CSV trials.
+- Exact-alarm access is required so the endpoint can be captured while the screen remains off. The user starts a trial, locks the phone, and exports the CSV after it finishes.
+- Battery readings are whole-device fuel-gauge estimates; subsystem counters may be modeled and are device-specific. Neither source automatically isolates native AOD power. The Display Modes screen requests Android-supported modes for the app's foreground window only; it cannot change native lock-screen AOD refresh. Optical AOD frequency requires an external sensor. Do not use the foreground Live AOD demo as a substitute for native lock-screen AOD in the primary study.
+- See [`RESEARCH_PROTOCOL.md`](RESEARCH_PROTOCOL.md) for the controlled comparison, exclusions, and analysis plan. The prior short benchmark and foreground demo are exploratory tools, not a validated AOD power measurement.
+- Analyze an untouched export with `python analysis/analyze_trials.py path/to/aod_study_trials.csv`; the script produces a paired summary and row/pair audit beside the input CSV.
+- **Download and install:** open the repository's **Actions** tab, select **Build Android APK**, open the latest successful run, and download `aod-study-debug-apk` under Artifacts. Unzip it and install `app-debug.apk` on the phone (allow installs from the app used to open the APK if Android prompts). The APK is debug-signed for research sideloading; this is not a Play Store release. A successful build confirms packaging, not validation on every study phone.
+- The workflow uses the checked-in Gradle wrapper (`android/gradlew`), so no separately installed Gradle is needed. A version tag such as `v1.1.0` also publishes the APK and SHA-256 file as GitHub Release assets.
 
 ---
 

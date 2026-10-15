@@ -5,3 +5,5 @@ aod_device_runner
 graphify-out/
 .DS_Store
 build/
+android/.gradle/
+android/work/
